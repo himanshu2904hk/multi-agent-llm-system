@@ -1,90 +1,85 @@
 """
-Vector store setup using ChromaDB + LangChain.
-Seeds a knowledge base of documents on first run.
+Vector store using ChromaDB with default embeddings (no PyTorch needed).
+Seeds a knowledge base on first run.
 """
 import os
 import logging
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
+import chromadb
+from chromadb.utils import embedding_functions
 
 logger = logging.getLogger(__name__)
 
 CHROMA_DIR = os.getenv("CHROMA_DIR", "/tmp/chroma_db")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
 
-# Knowledge base documents seeded into ChromaDB
 SEED_DOCUMENTS = [
-    Document(page_content="Python is a high-level, interpreted programming language created by Guido van Rossum. It was first released in 1991. Python emphasizes code readability and simplicity.", metadata={"source": "python_overview", "topic": "python"}),
-    Document(page_content="Python supports multiple programming paradigms including procedural, object-oriented, and functional programming. It has a large standard library and active community.", metadata={"source": "python_paradigms", "topic": "python"}),
-    Document(page_content="Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It focuses on developing computer programs that access data and use it to learn for themselves.", metadata={"source": "ml_overview", "topic": "machine_learning"}),
-    Document(page_content="Supervised learning is the most common type of machine learning. The algorithm learns from labeled training data and makes predictions. Examples include linear regression, decision trees, and neural networks.", metadata={"source": "ml_supervised", "topic": "machine_learning"}),
-    Document(page_content="Deep learning is a subset of machine learning that uses neural networks with many layers (deep neural networks). It is particularly effective for image recognition, natural language processing, and speech recognition.", metadata={"source": "deep_learning", "topic": "machine_learning"}),
-    Document(page_content="Docker is an open-source platform for developing, shipping, and running applications in containers. Containers allow developers to package an application with all its dependencies into a standardized unit.", metadata={"source": "docker_overview", "topic": "docker"}),
-    Document(page_content="Docker Compose is a tool for defining and running multi-container Docker applications. With Compose, you use a YAML file to configure your application's services, networks, and volumes.", metadata={"source": "docker_compose", "topic": "docker"}),
-    Document(page_content="FastAPI is a modern, fast web framework for building APIs with Python based on standard Python type hints. It is one of the fastest Python frameworks available, comparable to NodeJS and Go.", metadata={"source": "fastapi_overview", "topic": "fastapi"}),
-    Document(page_content="FastAPI automatically generates OpenAPI documentation. It supports async programming with Python asyncio, making it highly performant for I/O-bound operations.", metadata={"source": "fastapi_features", "topic": "fastapi"}),
-    Document(page_content="Large Language Models (LLMs) are neural networks trained on massive text datasets. They can generate human-like text, answer questions, write code, and perform many other language tasks.", metadata={"source": "llm_overview", "topic": "llm"}),
-    Document(page_content="Prompt engineering is the practice of designing and optimizing input prompts to get the best outputs from language models. Techniques include chain-of-thought, few-shot prompting, and role assignment.", metadata={"source": "prompt_engineering", "topic": "llm"}),
-    Document(page_content="RAG (Retrieval-Augmented Generation) combines information retrieval with language generation. It retrieves relevant documents from a knowledge base and uses them as context for generating answers.", metadata={"source": "rag_overview", "topic": "rag"}),
-    Document(page_content="The Eiffel Tower is located in Paris, France. It was built by Gustave Eiffel for the 1889 World's Fair. It stands 330 meters tall and is one of the most visited monuments in the world.", metadata={"source": "eiffel_tower", "topic": "geography"}),
-    Document(page_content="Water boils at 100 degrees Celsius (212 degrees Fahrenheit) at standard atmospheric pressure (1 atm). At higher altitudes, water boils at lower temperatures due to reduced air pressure.", metadata={"source": "water_boiling", "topic": "science"}),
-    Document(page_content="Python was created by Guido van Rossum and was first released on February 20, 1991. It was named after the British comedy series Monty Python's Flying Circus, not the snake.", metadata={"source": "python_history", "topic": "python"}),
-    Document(page_content="PostgreSQL is a powerful, open-source object-relational database system with over 35 years of active development. It supports advanced data types and performance optimization features.", metadata={"source": "postgresql_overview", "topic": "database"}),
-    Document(page_content="Redis is an in-memory data structure store used as a database, cache, and message broker. It supports data structures such as strings, hashes, lists, sets, sorted sets.", metadata={"source": "redis_overview", "topic": "database"}),
-    Document(page_content="Server-Sent Events (SSE) is a server push technology enabling clients to receive automatic updates from a server via HTTP connection. It is one-directional from server to client.", metadata={"source": "sse_overview", "topic": "web"}),
-    Document(page_content="Multi-agent systems consist of multiple interacting intelligent agents. Each agent perceives its environment and takes actions. Agents can cooperate, compete, or negotiate with each other.", metadata={"source": "multi_agent", "topic": "ai"}),
-    Document(page_content="Context window management in LLMs refers to handling the maximum token limit of a model. Techniques include summarization, chunking, and sliding window approaches to fit information within limits.", metadata={"source": "context_window", "topic": "llm"}),
+    {"id": "py1", "text": "Python is a high-level, interpreted programming language created by Guido van Rossum, first released in 1991. It emphasizes readability and simplicity.", "topic": "python"},
+    {"id": "py2", "text": "Python supports multiple paradigms: procedural, object-oriented, and functional. It has a vast standard library and active community.", "topic": "python"},
+    {"id": "py3", "text": "Python was named after Monty Python's Flying Circus, not the snake. Guido van Rossum created it in the late 1980s.", "topic": "python"},
+    {"id": "ml1", "text": "Machine learning is a subset of AI that enables systems to learn from data without being explicitly programmed. It includes supervised, unsupervised, and reinforcement learning.", "topic": "ml"},
+    {"id": "ml2", "text": "Deep learning uses neural networks with many layers. It excels at image recognition, NLP, and speech recognition tasks.", "topic": "ml"},
+    {"id": "ml3", "text": "Supervised learning trains on labeled data. Examples: linear regression, decision trees, neural networks, SVMs.", "topic": "ml"},
+    {"id": "dk1", "text": "Docker is an open-source platform for containerizing applications. Containers package code and dependencies together for consistent deployment.", "topic": "docker"},
+    {"id": "dk2", "text": "Docker Compose defines multi-container applications using a YAML file to configure services, networks, and volumes.", "topic": "docker"},
+    {"id": "fa1", "text": "FastAPI is a modern Python web framework for building APIs with automatic OpenAPI docs generation, type hints, and async support.", "topic": "fastapi"},
+    {"id": "fa2", "text": "FastAPI is one of the fastest Python frameworks, comparable to NodeJS and Go, built on Starlette and Pydantic.", "topic": "fastapi"},
+    {"id": "llm1", "text": "Large Language Models (LLMs) are neural networks trained on massive text corpora. They generate human-like text and perform language tasks.", "topic": "llm"},
+    {"id": "llm2", "text": "Prompt engineering optimizes LLM inputs. Techniques: chain-of-thought, few-shot, role assignment, RAG.", "topic": "llm"},
+    {"id": "rag1", "text": "RAG (Retrieval-Augmented Generation) combines information retrieval with generation. It fetches relevant documents and uses them as context for answers.", "topic": "rag"},
+    {"id": "geo1", "text": "The Eiffel Tower is located in Paris, France. Built by Gustave Eiffel for the 1889 World's Fair, standing 330 meters tall.", "topic": "geography"},
+    {"id": "sci1", "text": "Water boils at 100 degrees Celsius (212°F) at standard atmospheric pressure (1 atm). At higher altitudes it boils at lower temperatures.", "topic": "science"},
+    {"id": "db1", "text": "PostgreSQL is an open-source object-relational database with 35+ years of development. Supports advanced data types and ACID compliance.", "topic": "database"},
+    {"id": "db2", "text": "Redis is an in-memory data structure store used as database, cache, and message broker. Supports strings, hashes, lists, sets.", "topic": "database"},
+    {"id": "web1", "text": "Server-Sent Events (SSE) enables servers to push updates to clients over HTTP. It is one-directional: server to client only.", "topic": "web"},
+    {"id": "ai1", "text": "Multi-agent systems consist of multiple interacting intelligent agents. Agents can cooperate, compete, or negotiate to achieve goals.", "topic": "ai"},
+    {"id": "ctx1", "text": "Context window management handles LLM token limits via summarization, chunking, and sliding window techniques.", "topic": "llm"},
 ]
 
-_vectorstore = None
+_client = None
+_collection = None
 
 
-def get_vectorstore() -> Chroma:
-    global _vectorstore
-    if _vectorstore is not None:
-        return _vectorstore
+def get_collection():
+    global _client, _collection
+    if _collection is not None:
+        return _collection
 
-    logger.info("[rag_store] Initializing ChromaDB vector store...")
-    embeddings = SentenceTransformerEmbeddings(model_name=EMBED_MODEL)
+    logger.info("[rag_store] Initializing ChromaDB...")
+    _client = chromadb.PersistentClient(path=CHROMA_DIR)
+    ef = embedding_functions.DefaultEmbeddingFunction()
 
-    # Check if already seeded
     try:
-        _vectorstore = Chroma(
-            persist_directory=CHROMA_DIR,
-            embedding_function=embeddings,
-            collection_name="mega_ai_kb",
-        )
-        count = _vectorstore._collection.count()
+        _collection = _client.get_collection("mega_ai_kb", embedding_function=ef)
+        count = _collection.count()
         if count == 0:
-            raise ValueError("Empty collection")
-        logger.info(f"[rag_store] Loaded existing ChromaDB with {count} documents")
+            raise ValueError("Empty")
+        logger.info(f"[rag_store] Loaded ChromaDB with {count} docs")
     except Exception:
-        logger.info("[rag_store] Seeding ChromaDB with knowledge base documents...")
-        splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
-        chunks = splitter.split_documents(SEED_DOCUMENTS)
-        _vectorstore = Chroma.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            persist_directory=CHROMA_DIR,
-            collection_name="mega_ai_kb",
+        logger.info("[rag_store] Seeding ChromaDB knowledge base...")
+        _collection = _client.get_or_create_collection("mega_ai_kb", embedding_function=ef)
+        _collection.add(
+            ids=[d["id"] for d in SEED_DOCUMENTS],
+            documents=[d["text"] for d in SEED_DOCUMENTS],
+            metadatas=[{"topic": d["topic"]} for d in SEED_DOCUMENTS],
         )
-        logger.info(f"[rag_store] Seeded {len(chunks)} chunks into ChromaDB")
+        logger.info(f"[rag_store] Seeded {len(SEED_DOCUMENTS)} documents")
 
-    return _vectorstore
+    return _collection
 
 
 def similarity_search(query: str, k: int = 4) -> list:
-    """Return top-k relevant documents for a query."""
-    store = get_vectorstore()
-    results = store.similarity_search_with_score(query, k=k)
+    col = get_collection()
+    results = col.query(query_texts=[query], n_results=k)
+    docs = results["documents"][0]
+    distances = results["distances"][0]
+    metadatas = results["metadatas"][0]
+    ids = results["ids"][0]
     return [
         {
-            "content": doc.page_content,
-            "source": doc.metadata.get("source", "unknown"),
-            "topic": doc.metadata.get("topic", "general"),
-            "score": float(score),
+            "id": ids[i],
+            "content": docs[i],
+            "source": f"chromadb:{ids[i]}",
+            "topic": metadatas[i].get("topic", "general"),
+            "score": distances[i],
         }
-        for doc, score in results
+        for i in range(len(docs))
     ]
