@@ -427,4 +427,8 @@ def health():
 
 @app.get("/", include_in_schema=False)
 def frontend():
-    return FileResponse("/app/frontend/index.html")
+    import os
+    path = "/app/frontend/index.html"
+    if os.path.exists(path):
+        return FileResponse(path)
+    return {"status": "ok", "service": "mega-ai", "docs": "/docs"}
