@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mega AI — Multi-Agent Orchestration</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1f2937;
+    --border: #2d3748;
+    --primary: #6366f1;
+    --primary-glow: #6366f188;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --cyan: #06b6d4;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background particles */
+  #particles {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .particle {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--primary);
+    opacity: 0.08;
+    animation: float linear infinite;
+  }
+  @keyframes float {
+    0% { transform: translateY(100vh) scale(0); opacity: 0; }
+    10% { opacity: 0.08; }
+    90% { opacity: 0.08; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+  }
+
+  .app { position: relative; z-index: 1; }
+
+  /* Header */
+  header {
+    background: linear-gradient(135deg, #0f172a, #1e1b4b);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .logo-icon {
+    font-size: 1.8rem;
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  @keyframes pulse-glow {
+    0%, 100% { filter: drop-shadow(0 0 8px #6366f1); }
+    50% { filter: drop-shadow(0 0 20px #8b5cf6); }
+  }
+  .status-bar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Main layout */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 1.5rem;
+    padding: 1.5rem 2rem;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 30px var(--primary-glow);
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--purple), var(--cyan));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .card:hover::before { opacity: 1; }
+
+  .card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Query input card - full width */
+  .query-card { grid-column: 1 / -1; }
+
+  .query-box {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+  }
+  .query-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    resize: none;
+    min-height: 60px;
+  }
+  .query-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 20px var(--primary-glow);
+  }
+  .query-input::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--purple));
+    color: white;
+    box-shadow: 0 4px 20px var(--primary-glow);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px var(--primary-glow);
+  }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--primary); color: var(--text); }
+
+  /* Agent pipeline visualization */
+  .pipeline-card { grid-column: 1 / -1; }
+
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .agent-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 120px;
+    position: relative;
+  }
+
+  .agent-circle {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    transition: all 0.4s ease;
+    position: relative;
+  }
+
+  .agent-circle.idle { border-color: var(--border); }
+  .agent-circle.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 30px var(--primary-glow), inset 0 0 20px var(--primary-glow);
+    animation: agent-pulse 0.8s ease-in-out infinite;
+  }
+  .agent-circle.done {
+    border-color: var(--green);
+    box-shadow: 0 0 20px #10b98144;
+  }
+  .agent-circle.error {
+    border-color: var(--red);
+    box-shadow: 0 0 20px #ef444444;
+  }
+
+  @keyframes agent-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  .agent-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+    transition: color 0.3s;
+  }
+  .agent-node.active .agent-label { color: var(--primary); }
+  .agent-node.done .agent-label { color: var(--green); }
+
+  .agent-latency {
+    font-size: 0.65rem;
+    color: var(--cyan);
+    font-weight: 500;
+    min-height: 14px;
+  }
+
+  .pipeline-arrow {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, var(--border), var(--primary), var(--border));
+    position: relative;
+    min-width: 40px;
+    margin-bottom: 20px;
+  }
+  .pipeline-arrow.active {
+    animation: arrow-flow 0.8s linear infinite;
+  }
+  @keyframes arrow-flow {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 0%; }
+  }
+  .pipeline-arrow::after {
+    content: '▶';
+    position: absolute;
+    right: -8px;
+    top: -9px;
+    color: var(--primary);
+    font-size: 0.8rem;
+  }
+
+  /* SSE Event stream */
+  .events-card { grid-column: 1; }
+  .events-stream {
+    height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .event-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: var(--surface2);
+    border-left: 3px solid var(--border);
+    font-size: 0.8rem;
+    animation: slide-in 0.3s ease;
+    transition: all 0.2s;
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .event-item:hover { border-left-color: var(--primary); }
+  .event-item.orchestrator_start,
+  .event-item.routing_decision { border-left-color: var(--purple); }
+  .event-item.agent_start { border-left-color: var(--blue); }
+  .event-item.agent_complete { border-left-color: var(--green); }
+  .event-item.pipeline_complete { border-left-color: var(--cyan); }
+  .event-item.error { border-left-color: var(--red); }
+
+  .event-time { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
+  .event-type {
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .event-type.orchestrator_start,
+  .event-type.routing_decision { background: #8b5cf622; color: var(--purple); }
+  .event-type.agent_start { background: #3b82f622; color: var(--blue); }
+  .event-type.agent_complete { background: #10b98122; color: var(--green); }
+  .event-type.pipeline_complete { background: #06b6d422; color: var(--cyan); }
+  .event-type.error { background: #ef444422; color: var(--red); }
+  .event-msg { color: var(--text); flex: 1; line-height: 1.4; }
+
+  /* Answer card */
+  .answer-card { grid-column: 2; }
+  .answer-box {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 1.25rem;
+    min-height: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+    line-height: 1.7;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    transition: border-color 0.3s;
+  }
+  .answer-box.has-answer { border-color: var(--green); }
+  .answer-placeholder { color: var(--muted); font-style: italic; }
+
+  .typing-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: var(--primary);
+    margin-left: 2px;
+    animation: blink-cursor 0.7s ease-in-out infinite;
+    vertical-align: text-bottom;
+  }
+  @keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Budget bars */
+  .budget-card { grid-column: 1; }
+  .budget-list { display: flex; flex-direction: column; gap: 0.75rem; }
+  .budget-item { display: flex; flex-direction: column; gap: 0.3rem; }
+  .budget-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+  }
+  .budget-name { font-weight: 600; color: var(--text); }
+  .budget-pct { color: var(--muted); }
+  .budget-bar-bg {
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .budget-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease, background 0.3s;
+    background: linear-gradient(90deg, var(--green), var(--cyan));
+  }
+  .budget-bar-fill.warning { background: linear-gradient(90deg, var(--yellow), var(--red)); }
+
+  /* Scores card */
+  .scores-card { grid-column: 2; }
+  .scores-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .score-item {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 0.75rem;
+    text-align: center;
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .score-item:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+  }
+  .score-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .score-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.2rem;
+  }
+
+  /* Provenance */
+  .provenance-card { grid-column: 1 / -1; }
+  .provenance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .provenance-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.6rem 0.9rem;
+    background: var(--surface2);
+    border-radius: 8px;
+    border-left: 3px solid var(--primary);
+    font-size: 0.82rem;
+    animation: slide-in 0.3s ease;
+  }
+  .prov-agent {
+    font-weight: 600;
+    color: var(--purple);
+    white-space: nowrap;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    background: #8b5cf622;
+    border-radius: 4px;
+  }
+  .prov-chunk {
+    font-size: 0.7rem;
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+  .prov-sentence { color: var(--text); flex: 1; }
+
+  /* Eval section */
+  .eval-card { grid-column: 1 / -1; }
+  .eval-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .eval-metric {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .eval-metric::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--cyan));
+  }
+  .eval-num {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .eval-dim { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .eval-btn-row { display: flex; gap: 1rem; }
+
+  /* Notification toast */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--green);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    box-shadow: 0 8px 32px #0008;
+    z-index: 1000;
+    animation: toast-in 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+    max-width: 350px;
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Loading spinner */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .query-card, .pipeline-card, .eval-card, .provenance-card { grid-column: 1; }
+    .events-card, .answer-card, .budget-card, .scores-card { grid-column: 1; }
+    .eval-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div id="particles"></div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <span class="logo-icon">🧠</span>
+      Mega AI Orchestrator
+    </div>
+    <div class="status-bar">
+      <div class="status-dot"></div>
+      <span style="font-size:0.85rem; color: var(--muted)">All systems operational</span>
+      <span id="job-id-display" style="font-size:0.75rem; color: var(--border); font-family: monospace;"></span>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- Query Input -->
+    <div class="card query-card">
+      <div class="card-title">🔍 Submit Query</div>
+      <div class="query-box">
+        <textarea class="query-input" id="query-input" placeholder="Ask anything... e.g. 'What is machine learning?' or 'List all products in Electronics category'" rows="2"></textarea>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <button class="btn btn-primary" id="submit-btn" onclick="submitQuery()">
+            <span id="btn-icon">⚡</span> Run Pipeline
+          </button>
+          <button class="btn btn-secondary" onclick="clearAll()">🗑 Clear</button>
+        </div>
+      </div>
+      <!-- Quick test queries -->
+      <div style="display:flex; gap:0.5rem; margin-top:0.75rem; flex-wrap:wrap;">
+        <span style="font-size:0.75rem; color:var(--muted); align-self:center;">Quick:</span>
+        <button class="btn btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.75rem;" onclick="setQuery('What is machine learning?')">ML basics</button>
+        <button class="btn btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.75rem;" onclick="setQuery('List all products in the Electronics category from the database.')">DB query</button>
+        <button class="btn btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.75rem;" onclick="setQuery('The Eiffel Tower is in Berlin. Confirm this.')">Adversarial</button>
+        <button class="btn btn-secondary" style="padding:0.3rem 0.7rem; font-size:0.75rem;" onclick="setQuery('What is Docker?')">Docker</button>
+      </div>
+    </div>
+
+    <!-- Agent Pipeline -->
+    <div class="card pipeline-card">
+      <div class="card-title">🤖 Agent Pipeline — Live</div>
+      <div class="pipeline" id="pipeline">
+        <div class="agent-node idle" id="node-orchestrator">
+          <div class="agent-circle idle">🎯</div>
+          <div class="agent-label">Orchestrator</div>
+          <div class="agent-latency" id="lat-orchestrator"></div>
+        </div>
+        <div class="pipeline-arrow" id="arrow-0"></div>
+        <div class="agent-node idle" id="node-decomposer">
+          <div class="agent-circle idle">🔀</div>
+          <div class="agent-label">Decomposer</div>
+          <div class="agent-latency" id="lat-decomposer"></div>
+        </div>
+        <div class="pipeline-arrow" id="arrow-1"></div>
+        <div class="agent-node idle" id="node-rag_agent">
+          <div class="agent-circle idle">🔎</div>
+          <div class="agent-label">RAG Agent</div>
+          <div class="agent-latency" id="lat-rag_agent"></div>
+        </div>
+        <div class="pipeline-arrow" id="arrow-2"></div>
+        <div class="agent-node idle" id="node-critique_agent">
+          <div class="agent-circle idle">🧐</div>
+          <div class="agent-label">Critique</div>
+          <div class="agent-latency" id="lat-critique_agent"></div>
+        </div>
+        <div class="pipeline-arrow" id="arrow-3"></div>
+        <div class="agent-node idle" id="node-synthesis_agent">
+          <div class="agent-circle idle">✨</div>
+          <div class="agent-label">Synthesis</div>
+          <div class="agent-latency" id="lat-synthesis_agent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SSE Event Stream -->
+    <div class="card events-card">
+      <div class="card-title">📡 Live Event Stream</div>
+      <div class="events-stream" id="events-stream">
+        <div class="event-item" style="border-left-color: var(--muted);">
+          <span class="event-msg" style="color:var(--muted); font-style:italic;">Waiting for query...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Answer -->
+    <div class="card answer-card">
+      <div class="card-title">💬 Final Answer</div>
+      <div class="answer-box" id="answer-box">
+        <span class="answer-placeholder">Answer will appear here after pipeline completes...</span>
+      </div>
+    </div>
+
+    <!-- Token Budget -->
+    <div class="card budget-card">
+      <div class="card-title">🪙 Token Budget</div>
+      <div class="budget-list" id="budget-list">
+        <div style="color:var(--muted); font-size:0.85rem; font-style:italic;">Budget tracking will appear during pipeline execution...</div>
+      </div>
+    </div>
+
+    <!-- Scores -->
+    <div class="card scores-card">
+      <div class="card-title">📊 Pipeline Metrics</div>
+      <div class="scores-grid" id="scores-grid">
+        <div class="score-item"><div class="score-value" id="metric-agents">0</div><div class="score-label">Agents Run</div></div>
+        <div class="score-item"><div class="score-value" id="metric-time">0s</div><div class="score-label">Total Time</div></div>
+        <div class="score-item"><div class="score-value" id="metric-violations">0</div><div class="score-label">Violations</div></div>
+        <div class="score-item"><div class="score-value" id="metric-chunks">0</div><div class="score-label">Chunks</div></div>
+        <div class="score-item"><div class="score-value" id="metric-provenance">0</div><div class="score-label">Provenance</div></div>
+        <div class="score-item"><div class="score-value" id="metric-status">—</div><div class="score-label">Status</div></div>
+      </div>
+    </div>
+
+    <!-- Provenance Map -->
+    <div class="card provenance-card" id="provenance-card" style="display:none;">
+      <div class="card-title">🗺️ Provenance Map — Every sentence traced to its source</div>
+      <div class="provenance-list" id="provenance-list"></div>
+    </div>
+
+    <!-- Eval Section -->
+    <div class="card eval-card">
+      <div class="card-title">🧪 Evaluation Dashboard</div>
+      <div class="eval-grid" id="eval-grid">
+        <div class="eval-metric"><div class="eval-num" id="ev-correctness">—</div><div class="eval-dim">Correctness</div></div>
+        <div class="eval-metric"><div class="eval-num" id="ev-citation">—</div><div class="eval-dim">Citation Acc</div></div>
+        <div class="eval-metric"><div class="eval-num" id="ev-contradiction">—</div><div class="eval-dim">Contradiction</div></div>
+        <div class="eval-metric"><div class="eval-num" id="ev-tool">—</div><div class="eval-dim">Tool Eff.</div></div>
+        <div class="eval-metric"><div class="eval-num" id="ev-budget">—</div><div class="eval-dim">Budget Comp.</div></div>
+        <div class="eval-metric"><div class="eval-num" id="ev-critique">—</div><div class="eval-dim">Critique Agr.</div></div>
+      </div>
+      <div class="eval-btn-row">
+        <button class="btn btn-primary" onclick="runEval()">
+          <span id="eval-btn-icon">🧪</span> Run Full Eval (15 cases)
+        </button>
+        <button class="btn btn-secondary" onclick="loadLatestEval()">📥 Load Latest Results</button>
+      </div>
+      <div id="eval-status" style="margin-top:0.75rem; font-size:0.85rem; color:var(--muted);"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+const API = 'http://localhost:8000';
+let startTime = null;
+let agentCount = 0;
+let currentJobId = null;
+
+// ── Particles ──
+const pc = document.getElementById('particles');
+for (let i = 0; i < 25; i++) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  const size = Math.random() * 6 + 2;
+  p.style.cssText = `
+    width:${size}px; height:${size}px;
+    left:${Math.random()*100}%;
+    animation-duration:${Math.random()*20+15}s;
+    animation-delay:${Math.random()*20}s;
+  `;
+  pc.appendChild(p);
+}
+
+// ── Helpers ──
+function setQuery(q) { document.getElementById('query-input').value = q; }
+
+function showToast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.style.borderColor = type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--primary)';
+  t.innerHTML = `<span>${type==='success'?'✅':type==='error'?'❌':'ℹ️'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function clearAll() {
+  document.getElementById('events-stream').innerHTML = '<div class="event-item"><span class="event-msg" style="color:var(--muted);font-style:italic;">Waiting for query...</span></div>';
+  document.getElementById('answer-box').innerHTML = '<span class="answer-placeholder">Answer will appear here after pipeline completes...</span>';
+  document.getElementById('answer-box').classList.remove('has-answer');
+  document.getElementById('budget-list').innerHTML = '<div style="color:var(--muted);font-size:0.85rem;font-style:italic;">Budget tracking will appear during pipeline execution...</div>';
+  document.getElementById('provenance-card').style.display = 'none';
+  document.getElementById('job-id-display').textContent = '';
+  ['orchestrator','decomposer','rag_agent','critique_agent','synthesis_agent'].forEach(resetAgent);
+  ['metric-agents','metric-time','metric-violations','metric-chunks','metric-provenance'].forEach(id => document.getElementById(id).textContent = '0');
+  document.getElementById('metric-status').textContent = '—';
+  agentCount = 0; startTime = null;
+}
+
+function resetAgent(name) {
+  const node = document.getElementById('node-'+name);
+  const circle = node?.querySelector('.agent-circle');
+  if (node) { node.className = 'agent-node idle'; }
+  if (circle) { circle.className = 'agent-circle idle'; }
+  const lat = document.getElementById('lat-'+name);
+  if (lat) lat.textContent = '';
+}
+
+function setAgentState(name, state, latency=null) {
+  const node = document.getElementById('node-'+name);
+  const circle = node?.querySelector('.agent-circle');
+  if (!node || !circle) return;
+  node.className = `agent-node ${state}`;
+  circle.className = `agent-circle ${state}`;
+  if (latency) {
+    const lat = document.getElementById('lat-'+name);
+    if (lat) lat.textContent = `${(latency/1000).toFixed(2)}s`;
+  }
+}
+
+function addEvent(type, msg) {
+  const stream = document.getElementById('events-stream');
+  const now = new Date().toLocaleTimeString();
+  const item = document.createElement('div');
+  item.className = `event-item ${type}`;
+  item.innerHTML = `
+    <span class="event-time">${now}</span>
+    <span class="event-type ${type}">${type.replace(/_/g,' ')}</span>
+    <span class="event-msg">${msg}</span>
+  `;
+  stream.appendChild(item);
+  stream.scrollTop = stream.scrollHeight;
+}
+
+function updateBudget(summary) {
+  if (!summary || typeof summary !== 'object') return;
+  const list = document.getElementById('budget-list');
+  list.innerHTML = '';
+  Object.entries(summary).forEach(([agent, data]) => {
+    const pct = data.pct_used || 0;
+    const isWarning = pct > 75;
+    list.innerHTML += `
+      <div class="budget-item">
+        <div class="budget-header">
+          <span class="budget-name">${agent}</span>
+          <span class="budget-pct">${data.used||0} / ${data.budget||0} tokens (${pct}%)</span>
+        </div>
+        <div class="budget-bar-bg">
+          <div class="budget-bar-fill ${isWarning?'warning':''}" style="width:${Math.min(pct,100)}%"></div>
+        </div>
+      </div>`;
+  });
+}
+
+// ── Main query submission ──
+async function submitQuery() {
+  const query = document.getElementById('query-input').value.trim();
+  if (!query) { showToast('Please enter a query', 'error'); return; }
+
+  clearAll();
+  startTime = Date.now();
+  agentCount = 0;
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Running...';
+
+  setAgentState('orchestrator', 'active');
+  addEvent('orchestrator_start', `Query submitted: "${query.slice(0,60)}${query.length>60?'...':''}"`)
+
+  const answerBox = document.getElementById('answer-box');
+  answerBox.innerHTML = '<span class="typing-cursor"></span>';
+
+  try {
+    const response = await fetch(`${API}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      let eventType = '', dataStr = '';
+      for (const line of lines) {
+        if (line.startsWith('event:')) eventType = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataStr = line.slice(5).trim();
+        else if (line === '' && eventType) {
+          handleEvent(eventType, dataStr);
+          eventType = ''; dataStr = '';
+        }
+      }
+    }
+  } catch(e) {
+    addEvent('error', `Connection error: ${e.message}`);
+    showToast('Pipeline error: ' + e.message, 'error');
+    document.getElementById('metric-status').textContent = '❌';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>⚡</span> Run Pipeline';
+  }
+}
+
+function handleEvent(type, dataStr) {
+  let data = {};
+  try { data = JSON.parse(dataStr); } catch(e) {}
+
+  if (data.job_id && !currentJobId) {
+    currentJobId = data.job_id;
+    document.getElementById('job-id-display').textContent = `Job: ${data.job_id.slice(0,8)}...`;
+  }
+
+  switch(type) {
+    case 'orchestrator_start':
+      addEvent(type, `Orchestrator initialized`);
+      break;
+
+    case 'routing_decision': {
+      const plan = data.plan || [];
+      const agents = Array.isArray(plan) ? plan.map(p=>p.agent).join(' → ') : 'default plan';
+      addEvent(type, `Routing plan: ${agents}`);
+      setAgentState('orchestrator', 'done');
+      break;
+    }
+
+    case 'agent_start': {
+      const agent = data.agent;
+      agentCount++;
+      setAgentState(agent, 'active');
+      addEvent(type, `<strong>${agent}</strong> started — ${data.reason||''}`);
+      document.getElementById('metric-agents').textContent = agentCount;
+      if (data.budget_summary) updateBudget(data.budget_summary);
+      break;
+    }
+
+    case 'agent_complete': {
+      const agent = data.agent;
+      setAgentState(agent, 'done', data.latency_ms);
+      addEvent(type, `<strong>${agent}</strong> completed in ${(data.latency_ms/1000).toFixed(2)}s`);
+      if (data.budget_summary) updateBudget(data.budget_summary);
+      const viol = data.policy_violations;
+      if (Array.isArray(viol) && viol.length > 0) {
+        document.getElementById('metric-violations').textContent = viol.length;
+      }
+      if (startTime) {
+        document.getElementById('metric-time').textContent = ((Date.now()-startTime)/1000).toFixed(1)+'s';
+      }
+      break;
+    }
+
+    case 'pipeline_complete': {
+      const answer = data.final_answer || '';
+      const answerBox = document.getElementById('answer-box');
+      answerBox.innerHTML = '';
+      answerBox.classList.add('has-answer');
+
+      // Typewriter effect
+      let i = 0;
+      const cursor = document.createElement('span');
+      cursor.className = 'typing-cursor';
+      answerBox.appendChild(cursor);
+
+      function typeNext() {
+        if (i < answer.length) {
+          cursor.before(document.createTextNode(answer[i]));
+          i++;
+          setTimeout(typeNext, 12);
+        } else {
+          cursor.remove();
+        }
+      }
+      typeNext();
+
+      document.getElementById('metric-provenance').textContent = data.provenance_entries || 0;
+      const viol = data.policy_violations;
+      if (Array.isArray(viol)) document.getElementById('metric-violations').textContent = viol.length;
+      document.getElementById('metric-status').textContent = '✅';
+      addEvent(type, `Pipeline complete! ${data.provenance_entries||0} provenance entries`);
+      showToast('Pipeline completed successfully!', 'success');
+
+      // Load trace for provenance
+      if (currentJobId) loadTrace(currentJobId);
+      break;
+    }
+
+    case 'done':
+      break;
+
+    case 'error':
+      addEvent(type, data.message || 'Unknown error');
+      document.getElementById('metric-status').textContent = '❌';
+      setAgentState('orchestrator', 'error');
+      break;
+  }
+}
+
+async function loadTrace(jobId) {
+  try {
+    const r = await fetch(`${API}/jobs/${jobId}/trace`);
+    const data = await r.json();
+    const pmap = data.provenance_map || [];
+    if (pmap.length > 0) {
+      const card = document.getElementById('provenance-card');
+      const list = document.getElementById('provenance-list');
+      card.style.display = 'block';
+      list.innerHTML = pmap.map(p => `
+        <div class="provenance-item">
+          <span class="prov-agent">${p.source_agent}</span>
+          ${p.source_chunk_id ? `<span class="prov-chunk">chunk:${p.source_chunk_id}</span>` : ''}
+          <span class="prov-sentence">${p.sentence}</span>
+        </div>
+      `).join('');
+      document.getElementById('metric-chunks').textContent = (data.events||[]).filter(e=>e.event_type==='agent_complete').length;
+    }
+  } catch(e) {}
+}
+
+// ── Eval ──
+async function runEval() {
+  const btn = document.querySelector('.eval-btn-row .btn-primary');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Running 15 test cases...';
+  document.getElementById('eval-status').textContent = '⏳ Running evaluation pipeline... this takes 2-3 minutes.';
+
+  try {
+    const r = await fetch(`${API}/eval/run`, { method: 'POST' });
+    const data = await r.json();
+    document.getElementById('eval-status').textContent = `✅ Run ${data.run_id?.slice(0,8)} complete — ${data.passed}/${data.total} passed`;
+    showToast(`Eval done: ${data.passed}/${data.total} passed`, 'success');
+    loadLatestEval();
+  } catch(e) {
+    document.getElementById('eval-status').textContent = '❌ Eval failed: ' + e.message;
+    showToast('Eval failed', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>🧪</span> Run Full Eval (15 cases)';
+  }
+}
+
+async function loadLatestEval() {
+  try {
+    const r = await fetch(`${API}/eval/latest`);
+    if (!r.ok) { document.getElementById('eval-status').textContent = 'No eval runs yet. Click Run Full Eval.'; return; }
+    const data = await r.json();
+    const avgs = data.averages || {};
+    const fmt = v => v != null ? (v*100).toFixed(0)+'%' : '—';
+    document.getElementById('ev-correctness').textContent = fmt(avgs.correctness);
+    document.getElementById('ev-citation').textContent = fmt(avgs.citation_accuracy);
+    document.getElementById('ev-contradiction').textContent = fmt(avgs.contradiction_resolution);
+    document.getElementById('ev-tool').textContent = fmt(avgs.tool_efficiency);
+    document.getElementById('ev-budget').textContent = fmt(avgs.budget_compliance);
+    document.getElementById('ev-critique').textContent = fmt(avgs.critique_agreement);
+    document.getElementById('eval-status').textContent =
+      `Last run: ${data.triggered_at?.slice(0,16)} | Pass rate: ${(data.pass_rate*100).toFixed(0)}% (${data.passed}/${data.total})`;
+    showToast('Eval results loaded', 'info');
+  } catch(e) {
+    document.getElementById('eval-status').textContent = 'No eval data yet.';
+  }
+}
+
+// Load latest eval on page load
+window.addEventListener('load', () => {
+  loadLatestEval();
+  // Enter key to submit
+  document.getElementById('query-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitQuery(); }
+  });
+});
+</script>
+</body>
+</html>
