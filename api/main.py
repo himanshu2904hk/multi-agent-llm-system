@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -410,3 +411,8 @@ async def trigger_eval(db: Session = Depends(get_db)):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "mega-ai"}
+
+
+@app.get("/", include_in_schema=False)
+def frontend():
+    return FileResponse("/app/frontend/index.html")
