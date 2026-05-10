@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import uuid
@@ -99,18 +100,29 @@ async def submit_query(request: QueryRequest, db: Session = Depends(get_db)):
             data["event_type"] = event_type
             data["timestamp"] = datetime.utcnow().isoformat()
             data["job_id"] = job_id
+
+            # Structured logging: input_hash + output_hash per event
+            input_str = json.dumps(data, sort_keys=True, default=str)
+            input_hash = hashlib.sha256(input_str.encode()).hexdigest()[:16]
+            data["input_hash"] = input_hash
+
             events_queue.put_nowait(data)
 
-            # Persist to DB
+            # Persist to DB with hashes
             try:
                 agent_id = data.get("agent", "orchestrator")
+                output_str = json.dumps(data.get("final_answer", ""), default=str)
+                output_hash = hashlib.sha256(output_str.encode()).hexdigest()[:16]
                 ev = AgentEvent(
                     job_id=job_id,
                     agent_id=agent_id,
                     event_type=event_type,
+                    input_hash=input_hash,
+                    output_hash=output_hash,
                     input_data=data,
                     output_data=None,
                     token_count=data.get("token_count"),
+                    latency_ms=data.get("latency_ms"),
                 )
                 db.add(ev)
                 db.commit()

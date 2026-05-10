@@ -4,7 +4,7 @@ import asyncio
 from typing import AsyncGenerator, Callable
 from context_mgr.schema import SharedContext
 from context_mgr.budget import BudgetManager
-from agents.llm_client import chat_json
+from agents.llm_client import chat_json, chat_stream
 from agents import decomposer, rag_agent, critique_agent, synthesis_agent
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,24 @@ async def run_pipeline(
             "policy_violations": context.policy_violations,
         })
 
-    # --- Emit final answer ---
+    # --- Stream final answer token by token via SSE ---
+    if context.final_answer and emit:
+        tokens_buffer = []
+        try:
+            stream_messages = [
+                {"role": "system", "content": "You are a synthesis agent. Present the following answer clearly and concisely."},
+                {"role": "user", "content": f"Present this answer:\n{context.final_answer}"}
+            ]
+            streamed_answer = ""
+            for token in chat_stream(stream_messages, max_tokens=1024):
+                streamed_answer += token
+                emit("token", {"agent": "synthesis_agent", "token": token})
+            if streamed_answer:
+                context.final_answer = streamed_answer
+        except Exception as e:
+            logger.warning(f"[{AGENT_ID}] Token streaming failed: {e}, using buffered answer")
+
+    # --- Emit pipeline complete ---
     _emit("pipeline_complete", {
         "job_id": context.job_id,
         "final_answer": context.final_answer,

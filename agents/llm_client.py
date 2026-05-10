@@ -45,6 +45,26 @@ def chat(
     return content, tokens
 
 
+def chat_stream(messages: list, model: str = None, temperature: float = 0.2, max_tokens: int = 2048):
+    """
+    Streaming chat — yields tokens one by one as they arrive from Groq.
+    Use for synthesis agent to stream final answer token-by-token to SSE.
+    """
+    model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    client = get_client()
+    stream = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stream=True,
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta
+        if delta and delta.content:
+            yield delta.content
+
+
 def chat_json(messages: list, model: str = None, temperature: float = 0.1, max_tokens: int = 2048) -> tuple[dict, int]:
     """Chat expecting JSON response."""
     content, tokens = chat(
