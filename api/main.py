@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -39,13 +39,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
-    init_db()
-    # Register agent prompts for meta-agent
-    from agents import decomposer, rag_agent, critique_agent, synthesis_agent
-    meta_agent.register_prompt("decomposer", decomposer.SYSTEM_PROMPT)
-    meta_agent.register_prompt("rag_agent", rag_agent.SYSTEM_PROMPT)
-    meta_agent.register_prompt("critique_agent", critique_agent.SYSTEM_PROMPT)
-    meta_agent.register_prompt("synthesis_agent", synthesis_agent.SYSTEM_PROMPT)
+    try:
+        init_db()
+    except Exception as e:
+        logger.error(f"init_db error (non-fatal): {e}")
+    try:
+        from agents import decomposer, rag_agent, critique_agent, synthesis_agent
+        meta_agent.register_prompt("decomposer", decomposer.SYSTEM_PROMPT)
+        meta_agent.register_prompt("rag_agent", rag_agent.SYSTEM_PROMPT)
+        meta_agent.register_prompt("critique_agent", critique_agent.SYSTEM_PROMPT)
+        meta_agent.register_prompt("synthesis_agent", synthesis_agent.SYSTEM_PROMPT)
+    except Exception as e:
+        logger.error(f"Agent registration error (non-fatal): {e}")
     logger.info("Mega AI started")
 
 
@@ -427,8 +432,16 @@ def health():
 
 @app.get("/", include_in_schema=False)
 def frontend():
-    import os
     path = "/app/frontend/index.html"
     if os.path.exists(path):
-        return FileResponse(path)
-    return {"status": "ok", "service": "mega-ai", "docs": "/docs"}
+        try:
+            return FileResponse(path)
+        except Exception:
+            pass
+    return JSONResponse({
+        "status": "ok",
+        "service": "mega-ai",
+        "api_docs": "/docs",
+        "endpoints": ["/query", "/jobs/{id}/trace", "/eval/latest",
+                      "/eval/run", "/eval/rerun-failed", "/eval/rewrites/{id}/review"]
+    })
